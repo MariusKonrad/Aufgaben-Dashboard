@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aufgaben-Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0d0e12;--panel:#181b23;--border:#292d39;--text:#f3f4f7;--muted:#7580a0;--purple:#6c5ce7;--green:#31d49b;--red:#ff3158}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:14px}
+.top{height:68px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:24px}.brand{font-weight:800;font-size:19px;min-width:330px}.hint{font-size:11px;color:var(--muted);font-weight:500;margin-top:3px}
+.stats{display:flex;align-items:center;gap:18px;margin-left:auto;white-space:nowrap}.stat{color:var(--muted);font-size:12px}.stat b{font-size:16px;margin-right:5px}.done b{color:var(--green)}.urgent b,.over b{color:var(--red)}
+.primary{background:#725cf2;border:0;color:#fff;border-radius:9px;padding:10px 14px;font-weight:750;cursor:pointer}
+.toolbar{height:66px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 14px}.search,.select{height:35px;border:1px solid var(--border);background:#1a1d25;color:#9da5c2;border-radius:8px;padding:0 12px;outline:none}.search{width:210px}.select{min-width:138px}.count{margin-left:auto;color:#7280a7;font-size:12px}
+.board{display:flex;gap:14px;padding:14px;align-items:flex-start;overflow-x:auto;min-height:calc(100vh - 134px)}
+.column{width:calc((100vw - 98px)/5);min-width:250px;background:var(--panel);border:1px solid #2a2e3a;border-radius:12px;padding:10px;flex-shrink:0}.col-head{height:30px;display:flex;align-items:center;gap:8px;padding:0 2px 8px;font-weight:800}.dot{width:10px;height:10px;border-radius:50%}.backlog{background:#77809c}.todo{background:#7162ff}.progressdot{background:#f0a137}.review{background:#16d7c4}.finished{background:#35ce9d}.col-count{margin-left:auto;color:#65708f;font-size:12px;font-weight:500}
+.card{background:#15171e;border:1px solid #2a2e3a;border-radius:9px;padding:12px;margin:8px 1px;min-height:132px;position:relative;cursor:grab}.card:hover{border-color:#454b5e}.card.dragging{opacity:.45}.title{font-weight:800;font-size:13px;line-height:1.35;margin-bottom:8px}.desc{font-size:11px;line-height:1.55;color:#69759a;margin-bottom:9px}.tags{display:flex;gap:5px;flex-wrap:wrap}.tag{font-size:10px;font-weight:800;border-radius:4px;padding:3px 6px;background:#24324b;color:#5fa8ff}.tag.green{background:#27421d;color:#6fd347}.tag.purple{background:#3b1f4d;color:#c268ff}.tag.teal{background:#123f3c;color:#42d6bb}
+.meta{display:flex;align-items:center;margin-top:10px;gap:8px}.priority{font-size:9px;font-weight:900;letter-spacing:.4px;padding:4px 7px;border-radius:5px;background:#252938;color:#8490b1}.priority.high{background:#48202b;color:#ff526a}.priority.medium{background:#4a331d;color:#f4a33b}.priority.urgent{background:#5a1732;color:#ff3158}.date{margin-left:auto;font-size:9px;color:#53628a}.avatar{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:900;background:#2451a0}.add{margin-top:8px;border:1px dashed #303649;color:#6f7ba0;background:transparent;width:100%;padding:8px;border-radius:8px;text-align:left;font-size:11px;cursor:pointer}
+.modal-back{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:10}.modal{width:min(520px,calc(100vw - 30px));background:#181b23;border:1px solid #323746;border-radius:14px;padding:18px}.modal h2{margin:0 0 14px;font-size:17px}.form{display:grid;gap:10px}.form label{font-size:11px;color:#7d88a5}.form input,.form select,.form textarea{width:100%;background:#111319;border:1px solid #303545;color:#fff;border-radius:7px;padding:9px;outline:none}.form textarea{min-height:70px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}.secondary,.danger{border-radius:8px;padding:9px 13px}.secondary{background:#252936;color:#b7bfd7;border:1px solid #343949}.danger{margin-right:auto;background:#3b1822;color:#ff7182;border:1px solid #5a2633}.toast{position:fixed;right:18px;bottom:18px;background:#202531;border:1px solid #3a4152;padding:10px 13px;border-radius:8px;color:#c9d0e5;display:none;z-index:20}
+@media(max-width:1000px){.brand{min-width:auto}.hint{display:none}.stats{gap:9px}.stat:nth-child(2),.stat:nth-child(3),.stat:nth-child(4){display:none}.column{width:280px}}
+</style>
+</head>
+<body>
+<header class="top">
+<div class="brand">Aufgaben-Dashboard<div class="hint">Offenes Board · jeder mit dem Link kann bearbeiten</div></div>
+<div class="stats" id="stats"></div><button class="primary" onclick="openModal()">＋ Neue Aufgabe</button>
+</header>
+<div class="toolbar">
+<input class="search" id="search" placeholder="Suchen…" oninput="render()">
+<select class="select" id="person" onchange="render()"><option value="">Alle Personen</option></select>
+<select class="select" id="priorityFilter" onchange="render()"><option value="">Alle Prioritäten</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>URGENT</option></select>
+<div class="count" id="count"></div>
+</div>
+<main class="board" id="board"></main>
+<div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()"><div class="modal">
+<h2 id="modalTitle">Neue Aufgabe</h2><div class="form">
+<label>Titel<input id="fTitle" placeholder="Aufgabe"></label>
+<label>Beschreibung<textarea id="fDesc"></textarea></label>
+<div class="row"><label>Spalte<select id="fStatus"></select></label><label>Priorität<select id="fPriority"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>URGENT</option></select></label></div>
+<div class="row"><label>Person<input id="fPerson" placeholder="z. B. TM"></label><label>Fällig am<input id="fDate" type="date"></label></div>
+<label>Tags<input id="fTags" placeholder="z. B. frontend, ux"></label></div>
+<div class="actions"><button class="danger" id="deleteBtn" onclick="deleteTask()">Löschen</button><button class="secondary" onclick="closeModal()">Abbrechen</button><button class="primary" onclick="saveTask()">Speichern</button></div>
+</div></div><div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://hpdjxmhtbyyokgibokzu.supabase.co";
+const SUPABASE_KEY="sb_publishable_htBbMScBpgIFoOruUCMdKg_uR-Pckam";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const cols=[['Backlog','backlog'],['To Do','todo'],['In Progress','progressdot'],['Review','review'],['Done','finished']];
+let tasks=[],editing=null;
+const toast=m=>{const e=document.getElementById('toast');e.textContent=m;e.style.display='block';clearTimeout(window._toast);window._toast=setTimeout(()=>e.style.display='none',2200)};
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function norm(t){return {...t,tags:Array.isArray(t.tags)?t.tags:[]}}
+async function load(){const {data,error}=await db.from('tasks').select('*').order('created_at',{ascending:true});if(error){toast('Fehler beim Laden: '+error.message);return}tasks=(data||[]).map(norm);render()}
+function render(){
+ const q=document.getElementById('search').value.toLowerCase(),p=document.getElementById('person').value,pf=document.getElementById('priorityFilter').value;
+ const filtered=tasks.filter(t=>(!q||[t.title,t.description,...t.tags,t.person].join(' ').toLowerCase().includes(q))&&(!p||t.person===p)&&(!pf||t.priority===pf));
+ const done=tasks.filter(t=>t.status==='Done').length, urgent=tasks.filter(t=>t.priority==='URGENT').length, open=tasks.length-done;
+ document.getElementById('stats').innerHTML=`<span class="stat"><b>${tasks.length}</b>Gesamt</span><span class="stat done"><b>${done}</b>Erledigt</span><span class="stat urgent"><b>${urgent}</b>Dringend</span><span class="stat"><b>${open}</b>Offen</span><span class="stat"><b>${tasks.length?Math.round(done/tasks.length*100):0}%</b></span>`;
+ const people=[...new Set(tasks.map(t=>t.person).filter(Boolean))],ps=document.getElementById('person'),old=ps.value;ps.innerHTML='<option value="">Alle Personen</option>'+people.map(x=>`<option>${esc(x)}</option>`).join('');ps.value=people.includes(old)?old:'';
+ document.getElementById('count').textContent=`${filtered.length} / ${tasks.length} Aufgaben`;
+ document.getElementById('board').innerHTML=cols.map(([name,cls])=>{const ts=filtered.filter(t=>t.status===name);return `<section class="column" data-status="${esc(name)}" ondragover="event.preventDefault()" ondrop="drop(event)"><div class="col-head"><i class="dot ${cls}"></i><span>${esc(name)}</span><span class="col-count">${ts.length}</span></div>${ts.map(card).join('')}<button class="add" onclick="openModal('${esc(name)}')">＋ Aufgabe hinzufügen</button></section>`}).join('');
+}
+function card(t){return `<article class="card" draggable="true" ondragstart="event.dataTransfer.setData('id','${t.id}')" ondblclick="editTask('${t.id}')"><div class="title">${esc(t.title)}</div><div class="desc">${esc(t.description)}</div><div class="tags">${t.tags.map((x,i)=>`<span class="tag ${['','green','purple','teal'][i%4]}">${esc(x)}</span>`).join('')}</div><div class="meta"><span class="priority ${t.priority.toLowerCase()}">${esc(t.priority)}</span><span class="date">${esc(t.due_date||'')}</span>${t.person?`<span class="avatar">${esc(t.person)}</span>`:''}</div></article>`}
+async function drop(e){const id=e.dataTransfer.getData('id'),status=e.currentTarget.dataset.status;const t=tasks.find(x=>String(x.id)===id);if(!t||t.status===status)return;t.status=status;render();const {error}=await db.from('tasks').update({status,updated_at:new Date().toISOString()}).eq('id',id);if(error){toast('Speichern fehlgeschlagen');load()}else toast('Aufgabe verschoben')}
+function fillStatus(v){document.getElementById('fStatus').innerHTML=cols.map(c=>`<option>${esc(c[0])}</option>`).join('');document.getElementById('fStatus').value=v||cols[0][0]}
+function openModal(status){editing=null;document.getElementById('modalTitle').textContent='Neue Aufgabe';document.getElementById('deleteBtn').style.display='none';['fTitle','fDesc','fPerson','fDate','fTags'].forEach(id=>document.getElementById(id).value='');document.getElementById('fPriority').value='MEDIUM';fillStatus(status);document.getElementById('modalBack').style.display='flex'}
+function editTask(id){const t=tasks.find(x=>String(x.id)===String(id));if(!t)return;editing=id;document.getElementById('modalTitle').textContent='Aufgabe bearbeiten';document.getElementById('deleteBtn').style.display='block';fillStatus(t.status);document.getElementById('fTitle').value=t.title;document.getElementById('fDesc').value=t.description||'';document.getElementById('fPerson').value=t.person||'';document.getElementById('fDate').value=t.due_date||'';document.getElementById('fTags').value=t.tags.join(', ');document.getElementById('fPriority').value=t.priority;document.getElementById('modalBack').style.display='flex'}
+async function saveTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const data={title,description:document.getElementById('fDesc').value.trim(),status:document.getElementById('fStatus').value,priority:document.getElementById('fPriority').value,person:document.getElementById('fPerson').value.trim().toUpperCase(),due_date:document.getElementById('fDate').value||null,tags:document.getElementById('fTags').value.split(',').map(x=>x.trim()).filter(Boolean),updated_at:new Date().toISOString()};let res;if(editing)res=await db.from('tasks').update(data).eq('id',editing);else res=await db.from('tasks').insert(data);if(res.error){toast('Fehler: '+res.error.message);return}closeModal();await load();toast('Gespeichert')}
+async function deleteTask(){if(!editing)return;if(!confirm('Aufgabe wirklich löschen?'))return;const {error}=await db.from('tasks').delete().eq('id',editing);if(error){toast('Fehler: '+error.message);return}closeModal();await load();toast('Gelöscht')}
+function closeModal(){document.getElementById('modalBack').style.display='none'}
+db.channel('public-task-changes').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>load()).subscribe();
+load();
+</script>
+</body></html>
